@@ -287,6 +287,16 @@ const HARNESS = (dark) => {
     // ── 一键优化面板 ──
     var opt = document.querySelector('.urx-opt');
     parts.opt = opt ? 1 : 0;
+    // 模型选择器：原生弹出层的极性必须跟随主题（color-scheme），
+    // 否则深色主题下选项继承近白的文字色、弹在白底上，整列看不见 —— 真机截图验证过。
+    var pick = document.querySelector('.urx-opt-pick');
+    parts.optScheme = pick ? (getComputedStyle(pick).colorScheme || 'none') : 'none';
+    parts.optSchemeOk = pick ? (parts.optScheme === (window.__DARK__ ? 'dark' : 'light') ? 1 : 0) : 0;
+    // 选中项必须带供应商前缀：同一模型 id 常在不同供应商重复，
+    // 收起状态下看不到"是哪一家的"就是个会选错的下拉框。
+    var selOpt = pick && pick.selectedIndex >= 0 ? pick.options[pick.selectedIndex] : null;
+    parts.optLabel = selOpt ? selOpt.textContent.slice(0, 60) : '(none)';
+    parts.optLabelOk = selOpt ? (selOpt.textContent.indexOf('·') > 0 ? 1 : 0) : 0;
     if (window.__DRIVE_OPTIMIZE__) {
       var props = Array.prototype.slice.call(document.querySelectorAll('.urx-prop'));
       var opts = Array.prototype.slice.call(document.querySelectorAll('.urx-opt select option'));
@@ -328,12 +338,14 @@ const HARNESS = (dark) => {
 
     var overflow = parts.scrollW > parts.clientW + 1;
     var narrowText = parts.textRatio > 0 && parts.textRatio < 0.85;
+    // 选择器极性与标签前缀是所有任务都该满足的（面板只要渲染了就要对）。
+    var badPick = parts.opt === 1 ? (parts.optSchemeOk !== 1 || parts.optLabelOk !== 1) : false;
     var badOpt = window.__DRIVE_OPTIMIZE__
       ? (parts.opt !== 1 || parts.optModels < 2 || parts.optProps < 3 || parts.optOps !== 3 ||
          parts.optOpInk !== 3 || parts.propOverflow > 0 || parts.propClip > 0 ||
          parts.invalidWhy < 1 || (parts.propRatio > 0 && parts.propRatio < 0.9))
       : false;
-    var bad = overflow || parts.badTag > 0 || narrowText || badOpt;
+    var bad = overflow || parts.badTag > 0 || narrowText || badOpt || badPick;
     document.title = (bad ? 'LAYOUT_BAD ' : 'LAYOUT_OK ') +
       Object.keys(parts).map(function (k) { return k + '=' + parts[k]; }).join(' ');
   }
@@ -545,7 +557,8 @@ for (const job of jobs) {
     '<script>window.__SNAPSHOT__=' + JSON.stringify(job.snapshot || SNAPSHOT) + ';' +
     'window.__MODELS__=' + JSON.stringify(job.models || MODELS) + ';' +
     'window.__OPTIMIZE__=' + JSON.stringify(job.optimize || OPTIMIZE) + ';' +
-    'window.__DRIVE_OPTIMIZE__=' + (job.driveOptimize ? 'true' : 'false') + ';</script>\n'
+    'window.__DRIVE_OPTIMIZE__=' + (job.driveOptimize ? 'true' : 'false') + ';' +
+    'window.__DARK__=' + (job.dark ? 'true' : 'false') + ';</script>\n'
   const html = HARNESS(job.dark).replace(
     '<script>' + clientWrapped + '</script>',
     inject + '<script>' + clientWrapped + '</script>'
