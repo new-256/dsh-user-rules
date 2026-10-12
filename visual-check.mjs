@@ -36,56 +36,41 @@ const THEME = join(
   'client.js'
 )
 
-// 主题包把 CSS 内联在 JS 字符串里，且字符串里还混着大段 JS 源码。
-// 正则抓"长字符串"会抓错（验证过：抓出来的是 JS 源码，令牌一个都没解析），
-// 所以改用「从已知选择器开始做花括号配平」精确切出四个样式块：
-//   浅色静态色 / 深色静态色 / 浅色别名 / 深色别名
-// 静态色块不能省 —— --dsw-alias-* 大量是 var(--dsw-static-*)，缺了就没颜色。
+// 主题包把 CSS 内联在 JS 字符串里（var xxx_css_default = "..."），工装按字符串
+// 字面量完整还原（见下）。这里只读源码。
 const themeSrc = readFileSync(THEME, 'utf8')
 
-/** 从 start 处的选择器开始，按花括号配平切出完整规则块。 */
-function cssBlockAt(src, start) {
-  let depth = 0
-  for (let i = start; i < src.length; i += 1) {
-    const ch = src[i]
-    if (ch === '{') depth += 1
-    else if (ch === '}') {
-      depth -= 1
-      if (depth === 0) return src.slice(start, i + 1)
-    }
-  }
-  return null
-}
+// 主题包把样式表内嵌成多个 var xxx_css_default = "..." 字符串（base/design-platform/
+// focus/scrollbar/gradient…）。只抽其中几条令牌块的旧做法让大多数别名令牌
+// （settings-card-fill、interactive-bg-hover…）在工装里解析失败 → 面板底色透明、
+// 对比度断言失真。这里按字符串字面量完整还原全部样式块，和真实页面拿到的一致。
+const themeCss = [...themeSrc.matchAll(/var \w*css\w* = "((?:[^"\\]|\\.)*)"/g)]
+  .map((m) =>
+    // JS 字符串转义还原：\" → "，\\n → 换行，\\ → \，\/ → /。用单趟回调，
+    // 避免先替换 \\ 再替换 \n 时把字面反斜杠二次转义。
+    m[1].replace(/\\(.)/g, (s, c) => (c === 'n' ? '\n' : c === 't' ? '\t' : c))
+  )
+  .join('\n')
 
-const NEEDED = [
-  'body{--dsw-static-',
-  'body[data-ds-dark-theme]{--dsw-static-',
-  'body{--dsw-alias-bg-base',
-  'body[data-ds-dark-theme]{--dsw-alias-bg-base',
-]
-const themeCss = NEEDED.map((sel) => {
-  const idx = themeSrc.indexOf(sel)
-  if (idx < 0) throw new Error(`主题包中找不到样式块起点：${sel}`)
-  const block = cssBlockAt(themeSrc, idx)
-  if (!block) throw new Error(`样式块花括号不配平：${sel}`)
-  return block
-}).join('\n')
-
-// 硬校验：四个块必须齐全，否则渲染出来的颜色是假的。
+// 硬校验：还原失败（比如出现新的转义形式）必须当场炸出来，不许静默出假颜色。
+if (/\\[^"n't/]/.test(themeCss)) throw new Error('主题样式表还原后仍残留未知转义，提取器需要更新')
 for (const probe of [
   'body{--dsw-alias-bg-base',
   'body[data-ds-dark-theme]{--dsw-alias-bg-base',
   '--dsw-static-neutral-bluish-00',
+  '--dsw-alias-settings-card-fill:',
+  '--dsw-alias-interactive-bg-hover:',
+  '--dsw-alias-label-primary:',
 ]) {
   if (!themeCss.includes(probe)) {
-    throw new Error(`抽出的主题样式表缺少 ${probe}（长度 ${themeCss.length}）`)
+    throw new Error(`还原的主题样式表缺少 ${probe}（长度 ${themeCss.length}）`)
   }
 }
 // 再校验一条真实令牌能解析出颜色：别名必须引用到静态色。
 if (!/--dsw-alias-bg-base:var\(--dsw-static-/.test(themeCss)) {
-  throw new Error('抽出的样式表中 --dsw-alias-bg-base 未指向静态色，令牌链断裂')
+  throw new Error('还原的样式表中 --dsw-alias-bg-base 未指向静态色，令牌链断裂')
 }
-console.log(`主题样式表：${themeCss.length} 字符，4 个样式块齐全，令牌链完整`)
+console.log(`主题样式表：${themeCss.length} 字符（8 个内嵌样式表全量还原，令牌链完整）`)
 
 // ── 活动皮肤 ────────────────────────────────────────────────────────────
 // 真实环境几乎不会跑在裸主题上：本例用户启用了 whale-song 皮肤，它覆盖了
@@ -240,7 +225,14 @@ const HARNESS = (dark) => {
       if (ta && go) {
         window.__setReactValue__(ta, '回答一律用中文；改完代码必须跑测试；删掉没用的规则');
         go.click();
-        setTimeout(measure, 500);
+        // 提案渲染完再把模型下拉点开：展开态（菜单项）才是当年不可读的形态，
+        // 截图与对比度断言都必须对着它做，收起态看不出问题。
+        setTimeout(function () {
+          var pickBtn2 = document.querySelector('.urx-opt-pick .urx-sel-btn');
+          if (pickBtn2) { pickBtn2.click(); setTimeout(measure, 300); return; }
+          errors.push('未找到模型选择按钮');
+          document.title = 'ERRORS: ' + errors.join(' | ');
+        }, 500);
         return;
       }
       errors.push('未找到一键优化面板的输入框或按钮');
@@ -287,20 +279,60 @@ const HARNESS = (dark) => {
     // ── 一键优化面板 ──
     var opt = document.querySelector('.urx-opt');
     parts.opt = opt ? 1 : 0;
-    // 模型选择器：原生弹出层的极性必须跟随主题（color-scheme），
-    // 否则深色主题下选项继承近白的文字色、弹在白底上，整列看不见 —— 真机截图验证过。
-    var pick = document.querySelector('.urx-opt-pick');
-    parts.optScheme = pick ? (getComputedStyle(pick).colorScheme || 'none') : 'none';
-    parts.optSchemeOk = pick ? (parts.optScheme === (window.__DARK__ ? 'dark' : 'light') ? 1 : 0) : 0;
-    // 选中项必须带供应商前缀：同一模型 id 常在不同供应商重复，
-    // 收起状态下看不到"是哪一家的"就是个会选错的下拉框。
-    var selOpt = pick && pick.selectedIndex >= 0 ? pick.options[pick.selectedIndex] : null;
-    parts.optLabel = selOpt ? selOpt.textContent.slice(0, 60) : '(none)';
-    parts.optLabelOk = selOpt ? (selOpt.textContent.indexOf('·') > 0 ? 1 : 0) : 0;
+    // 自绘下拉（弃用原生 <select> 后）：收起态必须能看出"哪一家的模型" ——
+    // 同一模型 id 常在不同供应商重复，没有供应商前缀的下拉框会让人选错。
+    var pickBtn = document.querySelector('.urx-opt-pick .urx-sel-btn');
+    var pickLabel = pickBtn ? pickBtn.querySelector('.urx-sel-label') : null;
+    var pickText = pickLabel ? pickLabel.textContent : '';
+    parts.optLabel = pickText.slice(0, 60) || '(none)';
+    parts.optLabelOk = pickText.indexOf('·') > 0 ? 1 : 0;
     if (window.__DRIVE_OPTIMIZE__) {
       var props = Array.prototype.slice.call(document.querySelectorAll('.urx-prop'));
-      var opts = Array.prototype.slice.call(document.querySelectorAll('.urx-opt select option'));
-      parts.optModels = opts.length;
+      // 自绘下拉必须处于展开态（驱动阶段已点开）：菜单项数 = 模型数
+      parts.optModels = document.querySelectorAll('.urx-menu-item').length;
+      // 展开菜单的可读性量化：把「菜单底色 → 面板底色 → 页面底色」从上到下
+      // 逐层按 alpha 合成，得到菜单项背后真正生效的颜色，再对选项文字算
+      // WCAG 对比度。当年原生弹出层就是死在这里（近白字弹在白底上 ≈1.1:1）。
+      function parseC(s) {
+        var m = /rgba?[(]([0-9.]+)[ ]*[ ,]+[ ]*([0-9.]+)[ ]*[ ,]+[ ]*([0-9.]+)(?:[ ]*[ ,]+[ ]*([0-9.]+))?/.exec(s);
+        return m ? [+m[1], +m[2], +m[3], m[4] === undefined ? 1 : +m[4]] : null;
+      }
+      function comp(top, under) {
+        var a = top[3];
+        return [top[0] * a + under[0] * (1 - a), top[1] * a + under[1] * (1 - a), top[2] * a + under[2] * (1 - a), 1];
+      }
+      function lumOf(c) {
+        function f(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+        return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+      }
+      var menu = document.querySelector('.urx-menu');
+      var item0 = document.querySelector('.urx-menu-item');
+      if (menu && item0) {
+        // 计算值里既有 background-color 也可能有 background-image 分层
+        // （菜单把填充叠了两层提高不透明度），必须一起合成才是真实底色。
+        var fills = [];
+        var img = getComputedStyle(menu).backgroundImage;
+        if (img && img !== 'none') {
+          var mm = img.match(/rgba?\([^)]+\)/g) || [];
+          for (var mi = 0; mi < mm.length; mi += 1) fills.push(parseC(mm[mi]));
+        }
+        var mb0 = parseC(getComputedStyle(menu).backgroundColor);
+        if (mb0) fills.push(mb0);
+        var sb = parseC(getComputedStyle(stage).backgroundColor);
+        var hb = parseC(getComputedStyle(document.documentElement).backgroundColor);
+        var base = hb || [255, 255, 255, 1];
+        if (sb) base = comp(sb, base);
+        // fills[0] 是最上层；从最底层往上逐层合成
+        var eff = base;
+        for (var fi = fills.length - 1; fi >= 0; fi -= 1) {
+          if (fills[fi]) eff = comp(fills[fi], eff);
+        }
+        var fg = parseC(getComputedStyle(item0).color);
+        if (fg) {
+          var l1 = lumOf(fg), l2 = lumOf(eff);
+          parts.menuContrast = +((Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)).toFixed(2);
+        } else { parts.menuContrast = -1; }
+      } else { parts.menuContrast = -1; }
       parts.optProps = props.length;
       // 三类变更徽标都必须真的渲染出来，且颜色解析成了非透明色 ——
       // 只查 DOM 存在性会漏掉"节点在、但样式没生效"的静默失败。
@@ -338,10 +370,11 @@ const HARNESS = (dark) => {
 
     var overflow = parts.scrollW > parts.clientW + 1;
     var narrowText = parts.textRatio > 0 && parts.textRatio < 0.85;
-    // 选择器极性与标签前缀是所有任务都该满足的（面板只要渲染了就要对）。
-    var badPick = parts.opt === 1 ? (parts.optSchemeOk !== 1 || parts.optLabelOk !== 1) : false;
+    // 收起态必须带供应商前缀（面板只要渲染了就要对）。
+    var badPick = parts.opt === 1 ? parts.optLabelOk !== 1 : false;
     var badOpt = window.__DRIVE_OPTIMIZE__
-      ? (parts.opt !== 1 || parts.optModels < 2 || parts.optProps < 3 || parts.optOps !== 3 ||
+      ? (parts.opt !== 1 || parts.optModels < 2 || parts.menuContrast < 4.5 ||
+         parts.optProps < 3 || parts.optOps !== 3 ||
          parts.optOpInk !== 3 || parts.propOverflow > 0 || parts.propClip > 0 ||
          parts.invalidWhy < 1 || (parts.propRatio > 0 && parts.propRatio < 0.9))
       : false;
@@ -565,6 +598,23 @@ for (const job of jobs) {
   )
   const page = join(OUT, `harness-${job.name}.html`)
   writeFileSync(page, html, 'utf8')
+
+  // 硬校验：HARNESS 里的每个内联 <script> 必须能通过语法解析。
+  // 这些脚本是模板字符串拼出来的，node --check 查不到它们；而一条坏正则
+  // （模板里 \d → d）就能让整个 <script> 块静默失效 —— 页面渲染正常、
+  // 连 title 都没设，验收会给出"(no title)"这种看不懂的失败。
+  // 直接在构建期把每个脚本块解析一遍，这类损坏当场炸出来。
+  {
+    const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1])
+    for (let i = 0; i < scripts.length; i += 1) {
+      try {
+        // Function 构造只做解析（不执行），等价于一次语法检查。
+        new Function(scripts[i])
+      } catch (e) {
+        throw new Error(`harness-${job.name} 内联脚本 #${i} 语法错误：${e.message}`)
+      }
+    }
+  }
   const shot = join(OUT, `panel-${job.name}.png`)
   // 独立的 user-data-dir：否则第二次启动会挂到已在运行的 Chrome 实例上，
   // 截出来的图会是上一张（light/dark 出现相同字节）。
