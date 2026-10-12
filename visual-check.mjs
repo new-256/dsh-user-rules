@@ -183,16 +183,34 @@ const HARNESS = (dark) => {
 <script>
 (function () {
   // 桩掉 fetch：返回固定快照，让组件渲染出完整状态而非空列表。
+  // 「一键优化」要额外两个接口：模型清单与优化结果（见 __MODELS__ / __OPTIMIZE__）。
   const SNAPSHOT = window.__SNAPSHOT__;
+  const MODELS = window.__MODELS__;
+  const OPTIMIZE = window.__OPTIMIZE__;
   window.fetch = function (url) {
-    const isState = String(url).indexOf('/state') >= 0;
+    const u = String(url);
+    const isState = u.indexOf('/state') >= 0;
+    const isModels = u.indexOf('/models') >= 0;
+    const isOptimize = u.indexOf('/optimize') >= 0;
     return Promise.resolve({
       ok: true,
       status: 200,
       json: function () {
-        return Promise.resolve(isState ? SNAPSHOT : { ok: true, state: SNAPSHOT });
+        if (isState) return Promise.resolve(SNAPSHOT);
+        if (isModels) return Promise.resolve(MODELS);
+        if (isOptimize) return Promise.resolve(OPTIMIZE);
+        return Promise.resolve({ ok: true, state: SNAPSHOT });
       }
     });
+  };
+  // React 受控输入：必须走原生 setter + input 事件，直接改 .value 不会触发 onChange。
+  window.__setReactValue__ = function (el, value) {
+    var proto = el.tagName === 'TEXTAREA'
+      ? window.HTMLTextAreaElement.prototype
+      : window.HTMLInputElement.prototype;
+    var setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+    setter.call(el, value);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
   };
   const mod = window.__captured;
   const errors = [];
@@ -214,6 +232,25 @@ const HARNESS = (dark) => {
     } catch (e) { errors.push('render: ' + e.message); }
   }
   setTimeout(function () {
+    if (errors.length) { document.title = 'ERRORS: ' + errors.join(' | '); return; }
+    // 需要看到"已生成提案"的形态时，先驱动一次一键优化，再进入量化验收。
+    if (window.__DRIVE_OPTIMIZE__) {
+      var ta = document.querySelector('.urx-opt .urx-opt-req');
+      var go = document.querySelector('.urx-opt .urx-btn-primary');
+      if (ta && go) {
+        window.__setReactValue__(ta, '回答一律用中文；改完代码必须跑测试；删掉没用的规则');
+        go.click();
+        setTimeout(measure, 500);
+        return;
+      }
+      errors.push('未找到一键优化面板的输入框或按钮');
+      document.title = 'ERRORS: ' + errors.join(' | ');
+      return;
+    }
+    measure();
+  }, 600);
+
+  function measure() {
     if (errors.length) { document.title = 'ERRORS: ' + errors.join(' | '); return; }
     // 量化验收：把关键布局尺寸报出来，避免"看起来还行"这种主观判断。
     // 溢出（scrollWidth > clientWidth）一律算失败。
@@ -246,12 +283,60 @@ const HARNESS = (dark) => {
       footOverflow: foot ? (foot.scrollWidth > foot.clientWidth + 1) : null,
       fontPx: getComputedStyle(document.body).fontSize
     };
+
+    // ── 一键优化面板 ──
+    var opt = document.querySelector('.urx-opt');
+    parts.opt = opt ? 1 : 0;
+    if (window.__DRIVE_OPTIMIZE__) {
+      var props = Array.prototype.slice.call(document.querySelectorAll('.urx-prop'));
+      var opts = Array.prototype.slice.call(document.querySelectorAll('.urx-opt select option'));
+      parts.optModels = opts.length;
+      parts.optProps = props.length;
+      // 三类变更徽标都必须真的渲染出来，且颜色解析成了非透明色 ——
+      // 只查 DOM 存在性会漏掉"节点在、但样式没生效"的静默失败。
+      var classes = ['urx-op-add', 'urx-op-update', 'urx-op-remove'];
+      parts.optOps = classes.filter(function (c) {
+        return document.querySelector('.' + c);
+      }).length;
+      parts.optOpInk = classes.filter(function (c) {
+        var el = document.querySelector('.' + c);
+        if (!el) return false;
+        var bg = getComputedStyle(el).backgroundColor;
+        var fg = getComputedStyle(el).color;
+        return bg && bg !== 'rgba(0, 0, 0, 0)' && fg && fg !== 'rgba(0, 0, 0, 0)';
+      }).length;
+      // 提案卡片不得横向溢出（textarea / 长文本是常见溢出源）
+      parts.propOverflow = props.filter(function (el) {
+        return el.scrollWidth > el.clientWidth + 1;
+      }).length;
+      // 提案卡片的正文编辑框必须几乎占满卡片宽度
+      var ta = document.querySelector('.urx-prop .urx-prop-ta');
+      parts.propRatio = ta && props[0]
+        ? +(ta.getBoundingClientRect().width / props[0].getBoundingClientRect().width).toFixed(3)
+        : -1;
+      // 长文本不得被截在半个字上：自动增高的编辑框必须不产生内部滚动。
+      // 早先固定 min-height，长规则只露出两行半，看起来像渲染坏了。
+      var tas = Array.prototype.slice.call(document.querySelectorAll('.urx-prop-ta'));
+      parts.propClip = tas.filter(function (el) {
+        return el.scrollHeight > el.clientHeight + 1;
+      }).length;
+      // 被标红的无效项必须给出具体原因（有文字），否则用户不知道为什么点不动
+      parts.invalidWhy = Array.prototype.slice
+        .call(document.querySelectorAll('.urx-prop-bad .urx-prop-bad-list li'))
+        .filter(function (el) { return el.textContent.trim().length > 0; }).length;
+    }
+
     var overflow = parts.scrollW > parts.clientW + 1;
     var narrowText = parts.textRatio > 0 && parts.textRatio < 0.85;
-    var bad = overflow || parts.badTag > 0 || narrowText;
+    var badOpt = window.__DRIVE_OPTIMIZE__
+      ? (parts.opt !== 1 || parts.optModels < 2 || parts.optProps < 3 || parts.optOps !== 3 ||
+         parts.optOpInk !== 3 || parts.propOverflow > 0 || parts.propClip > 0 ||
+         parts.invalidWhy < 1 || (parts.propRatio > 0 && parts.propRatio < 0.9))
+      : false;
+    var bad = overflow || parts.badTag > 0 || narrowText || badOpt;
     document.title = (bad ? 'LAYOUT_BAD ' : 'LAYOUT_OK ') +
       Object.keys(parts).map(function (k) { return k + '=' + parts[k]; }).join(' ');
-  }, 600);
+  }
 })();
 </script>
 </body></html>`
@@ -270,6 +355,8 @@ const SNAPSHOT = {
   lastCwd: 'C:\\Users\\lcl\\Desktop\\DSH插件开发',
   stats: { loads: 1, saves: 6, injected: 2, lastInjectAt: '2026-10-12T00:44:56.607Z', lastInjectChars: 686 },
   lastError: null,
+  optimizeEnabled: true,
+  optimize: { calls: 3, failures: 0, lastMs: 4230, lastExtractVia: 'raw' },
   // 用用户真实的那 4 条规则做快照 —— 这样截图可以和真机截图逐条对照。
   rules: [
     {
@@ -327,6 +414,104 @@ const SNAPSHOT = {
   ]
 }
 
+// ── 一键优化的桩件数据 ────────────────────────────────────────────────────
+// 模型清单：两个供应商、三个模型，用来验证 optgroup 分组与默认选择。
+const MODELS = {
+  ok: true,
+  providers: [
+    { id: 'deepseek', name: 'DeepSeek' },
+    { id: 'openai', name: 'OpenAI' },
+  ],
+  models: [
+    { provider: 'deepseek', providerName: 'DeepSeek', id: 'deepseek-chat', name: 'DeepSeek Chat', description: '' },
+    { provider: 'deepseek', providerName: 'DeepSeek', id: 'deepseek-reasoner', name: 'DeepSeek Reasoner', description: '' },
+    { provider: 'openai', providerName: 'OpenAI', id: 'gpt-4o', name: 'GPT-4o', description: '' },
+  ],
+  preset: { provider: 'deepseek', model: 'deepseek-chat' },
+  failures: [],
+}
+
+// 优化结果：刻意混入一条无效项（找不到 id）与一条合法 add，
+// 这样截图里三类徽标 + 红色无效项 + 具体原因同时可见。
+const OPTIMIZE = {
+  ok: true,
+  summary: '把三条口语需求编译成可判定的规则，并清理一条已被覆盖的旧规则',
+  proposals: [
+    {
+      index: 0,
+      op: 'add',
+      id: '',
+      title: '回答语言固定',
+      text: '回答用户时必须一律使用简体中文；代码、命令与路径保持原文，不翻译。',
+      scope: 'global',
+      workspacePath: '',
+      reason: '需求明确要求语言一致，且需要区分"正文翻译 / 代码不翻译"。',
+      target: null,
+      valid: true,
+      problems: [],
+    },
+    {
+      index: 1,
+      op: 'update',
+      id: 'ef163280-92b0-43fa-bcfc-c97cde77c9d0',
+      title: '🤝 团队协作与效能飞跃规范',
+      text: '• 多智能体与子代理机制：在条件允许时，必须积极启用子代理（Sub-agent）架构或自动化流水线，并在任务开始前明确每个子代理的写入范围。\n• 团队高效协作机制：建立清晰的代码评审与信息同步机制，消除沟通壁垒。',
+      scope: 'global',
+      workspacePath: '',
+      reason: '原规则缺少"写入范围"这一可验证约束，机器无法判定是否遵守。',
+      target: {
+        id: 'ef163280-92b0-43fa-bcfc-c97cde77c9d0',
+        title: '🤝 团队协作与效能飞跃规范',
+        text: '• 多智能体与子代理机制：在条件允许时，必须积极启用子代理（Sub-agent）架构或自动化流水线。通过任务拆解与多智能体协同，提升项目一次通过率。\n• 团队高效协作机制：建立清晰的团队协作、代码评审与信息同步机制，利用工具和标准流程消除沟通壁垒，最大化提升协同效率。',
+        scope: 'global',
+        workspacePath: '',
+        enabled: true,
+      },
+      valid: true,
+      problems: [],
+    },
+    {
+      index: 2,
+      op: 'remove',
+      id: '290f7cf7-7f6b-4ad8-b67f-e4d4ce004a92',
+      title: '',
+      text: '',
+      scope: 'global',
+      workspacePath: '',
+      reason: '该规则与「质量控制」主题重叠，且需求里未提及，属于可清理的冗余。',
+      target: {
+        id: '290f7cf7-7f6b-4ad8-b67f-e4d4ce004a92',
+        title: '🔍 质量控制与异常处理',
+        text: '• 异常问题零延迟修正：项目运行中出现的任何系统警告（Warning）和错误（Error），必须立刻定位并修正，严禁积压或拖沓。\n• 双重视觉审查交付：凡涉及视觉输出的系统，在交付前必须通过严格的视觉效果检查与量化评估。',
+        scope: 'global',
+        workspacePath: '',
+        enabled: true,
+      },
+      valid: true,
+      problems: [],
+    },
+    {
+      index: 3,
+      op: 'update',
+      id: '不存在的-id',
+      title: '这条应当被标红',
+      text: '目标 id 不存在，属于无效提案。',
+      scope: 'global',
+      workspacePath: '',
+      reason: '用来验证无效项会被保留并标红，而不是被悄悄丢弃。',
+      target: null,
+      valid: false,
+      problems: ['找不到 id=不存在的-id 的规则'],
+    },
+  ],
+  totals: { add: 1, update: 2, remove: 1, invalid: 1 },
+  model: { provider: 'deepseek', model: 'deepseek-chat' },
+  finish: 'stop',
+  usage: { inputTokens: 1180, outputTokens: 460 },
+  elapsedMs: 4230,
+  extractVia: 'raw',
+}
+
 const CHROME = [
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
@@ -349,12 +534,21 @@ const jobs = [
   { name: 'narrow', dark: false, width: 520 },
   // 空态：零规则时必须仍然是"有设计的样子"，不能是一块空白。
   { name: 'empty', dark: false, width: 740, snapshot: { ...SNAPSHOT, rules: [] } },
+  // 一键优化：驱动一次"优化"，验收模型选择器、三类变更徽标、无效项标红与原因、
+  // 以及提案卡片不横向溢出。只截静态空面板看不出这些。
+  { name: 'optimize', dark: false, width: 740, driveOptimize: true },
+  { name: 'optimize-dark', dark: true, width: 740, driveOptimize: true },
 ]
 
 for (const job of jobs) {
+  const inject =
+    '<script>window.__SNAPSHOT__=' + JSON.stringify(job.snapshot || SNAPSHOT) + ';' +
+    'window.__MODELS__=' + JSON.stringify(job.models || MODELS) + ';' +
+    'window.__OPTIMIZE__=' + JSON.stringify(job.optimize || OPTIMIZE) + ';' +
+    'window.__DRIVE_OPTIMIZE__=' + (job.driveOptimize ? 'true' : 'false') + ';</script>\n'
   const html = HARNESS(job.dark).replace(
     '<script>' + clientWrapped + '</script>',
-    '<script>window.__SNAPSHOT__=' + JSON.stringify(job.snapshot || SNAPSHOT) + ';</script>\n<script>' + clientWrapped + '</script>'
+    inject + '<script>' + clientWrapped + '</script>'
   )
   const page = join(OUT, `harness-${job.name}.html`)
   writeFileSync(page, html, 'utf8')

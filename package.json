@@ -1,7 +1,7 @@
 {
   "name": "dsh-user-rules",
-  "version": "1.0.0",
-  "description": "DSH 用户规则注入器：把用户自定义的长期规则持久化到本地，并在每次模型请求里注入系统提示；提供 /rules 斜杠命令、user_rules 模型工具、HTTP 管理接口与 Web 图形管理页（设置 → 用户规则）。",
+  "version": "1.1.0",
+  "description": "DSH 用户规则注入器：把用户自定义的长期规则持久化到本地，并在每次模型请求里注入系统提示；提供 /rules 斜杠命令、user_rules 模型工具、HTTP 管理接口与 Web 图形管理页（设置 → 用户规则）。1.1.0 起支持「一键优化」：用指定模型把自然语言需求编译成机器可读规则，确认后批量增改删。",
   "type": "module",
   "icon": "./icon.svg",
   "main": "./lib/index.mjs",
@@ -33,7 +33,8 @@
   "scripts": {
     "test": "node smoke-test.mjs",
     "visual": "node visual-check.mjs",
-    "audit:css": "node css-audit.mjs"
+    "audit:css": "node css-audit.mjs",
+    "verify": "node smoke-test.mjs && node css-audit.mjs && node visual-check.mjs"
   },
   "keywords": [
     "dsh",
@@ -42,7 +43,9 @@
     "plugin",
     "user-rules",
     "system-prompt",
-    "rules"
+    "rules",
+    "llm",
+    "rule-compiler"
   ],
   "license": "MIT",
   "author": "new-256",
