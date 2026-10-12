@@ -1,0 +1,20 @@
+# dsh-user-rules bundle patch — 单行设计：唯一行 name = 裸包名。
+# package.json 的 main 即 host 半（lib/index.mjs：规则存储 / 系统提示注入 /
+# user_rules 工具 / /rules 命令 / HTTP 路由）；客户端 bundle 由 dsh.client 声明
+# + exports "./client" 提供，client-modules 从这同一行解析——不得另加裸包名
+# client 行（两行会被判 multiple active Loader sources 致命冲突）。
+#
+# config 中的值即插件默认值，可在本行覆盖；用户规则本身**不**写在这里，
+# 而是持久化到 $DSH_HOME/user-rules.json，由 Web 管理页 / /rules 命令 /
+# user_rules 工具维护。
+- insert:
+    - id: user-rules
+      name: dsh-user-rules
+      config:
+        enabled: true
+        sectionOrder: 10050
+        maxRuleChars: 4000
+        maxTotalChars: 20000
+        manageTools: true
+        manageCommand: true
+        httpRoutes: true

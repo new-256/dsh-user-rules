@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "title": "User Rules Injector",
+    "description": "Stores your own long-lived rules locally and injects them into the system prompt of every model request. Per-rule enable, ordering, global or workspace scope, plus a graphical management page, a /rules command and a user_rules tool."
+  },
+  "panel": {
+    "title": "User Rules",
+    "subtitle": "Rules are injected into the system prompt; every model request after this one obeys them.",
+    "empty": "No rules yet. Add one below, for example \"Always answer in Chinese\" or \"Run the tests before touching code\".",
+    "emptyTitle": "No rules yet",
+    "addTitle": "Add a rule",
+    "expand": "Show full text",
+    "collapse": "Collapse",
+    "add": "Add rule",
+    "save": "Save",
+    "saved": "Saved",
+    "saveFailed": "Save failed",
+    "reload": "Reload",
+    "loading": "Loading…",
+    "refresh": "Refresh",
+    "delete": "Delete",
+    "edit": "Edit",
+    "cancel": "Cancel",
+    "confirmDelete": "Confirm delete",
+    "clearAll": "Delete all",
+    "enabledAll": "Master switch",
+    "enabledAllHint": "When off, no rule is injected at all.",
+    "scopeGlobal": "Global",
+    "scopeWorkspace": "This workspace only",
+    "placeholder": "Write one rule — the more concrete, the better it is obeyed…",
+    "titlePlaceholder": "Rule name (optional)",
+    "count": "{n} rule(s), {m} in effect",
+    "chars": "{n} chars",
+    "movedUp": "Moved up",
+    "movedDown": "Moved down",
+    "noWorkspace": "Session workspace not known yet - only global rules for now (hit Refresh to retry).",
+    "filePath": "Stored at",
+    "injected": "Injected into the system prompt",
+    "notInjected": "Not injected",
+    "help": "Rules are injected top to bottom. Global rules apply to every session; workspace rules apply only to sessions whose workspace path matches."
+  }
+}

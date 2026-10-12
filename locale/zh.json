@@ -1,0 +1,42 @@
+{
+  "meta": {
+    "title": "用户规则注入器",
+    "description": "把用户自定义的长期规则持久化到本地，并注入每一次模型请求的系统提示。支持开关、优先级排序、生效范围（全局/按工作区），并提供图形管理页、/rules 命令与 user_rules 工具三种维护入口。"
+  },
+  "panel": {
+    "title": "用户规则",
+    "subtitle": "规则会注入系统提示，本会话之后的每一次模型请求都遵守。",
+    "empty": "还没有任何规则。在下方输入一条规则，例如「回答一律用中文」「改代码前先跑测试」。",
+    "emptyTitle": "暂无规则",
+    "addTitle": "新增规则",
+    "expand": "展开全文",
+    "collapse": "收起",
+    "add": "添加规则",
+    "save": "保存",
+    "saved": "已保存",
+    "saveFailed": "保存失败",
+    "reload": "重新读取",
+    "loading": "读取中…",
+    "refresh": "刷新",
+    "delete": "删除",
+    "edit": "编辑",
+    "cancel": "取消",
+    "confirmDelete": "确认删除",
+    "clearAll": "清空全部",
+    "enabledAll": "总开关",
+    "enabledAllHint": "关闭后所有规则都不再注入。",
+    "scopeGlobal": "全局",
+    "scopeWorkspace": "仅当前工作区",
+    "placeholder": "写一条规则，越具体越容易遵守…",
+    "titlePlaceholder": "规则名（可选，便于识别）",
+    "count": "共 {n} 条规则（生效 {m} 条）",
+    "chars": "{n} 字",
+    "movedUp": "已上移",
+    "movedDown": "已下移",
+    "noWorkspace": "尚未获取到会话工作区，暂只能添加全局规则（点「刷新」重试）。",
+    "filePath": "存储位置",
+    "injected": "正在注入系统提示",
+    "notInjected": "未注入",
+    "help": "规则按从上到下的顺序注入。全局规则对所有会话生效；工作区规则只在工作区路径匹配的会话生效。"
+  }
+}

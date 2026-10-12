@@ -1,0 +1,7 @@
+# 统一换行，避免 Windows 检出把整个仓库变成 CRLF 差异
+* text=auto
+
+# 二进制资源不做换行转换（验收截图会被仓库引用）
+*.png binary
+*.webp binary
+*.woff2 binary

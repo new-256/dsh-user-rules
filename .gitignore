@@ -1,0 +1,10 @@
+# 依赖（本插件零运行时依赖，此目录只在本地测试工装时出现）
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+
+# 视觉验收工装生成的中间产物；截图（panel-*.png）是有意保留的验收证据
+visual/harness-*.html
+visual/token-probe.html
+visual/.chrome-*
+visual/dom*.html

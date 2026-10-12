@@ -1,0 +1,60 @@
+{
+  "name": "dsh-user-rules",
+  "version": "1.0.0",
+  "description": "DSH 用户规则注入器：把用户自定义的长期规则持久化到本地，并在每次模型请求里注入系统提示；提供 /rules 斜杠命令、user_rules 模型工具、HTTP 管理接口与 Web 图形管理页（设置 → 用户规则）。",
+  "type": "module",
+  "icon": "./icon.svg",
+  "main": "./lib/index.mjs",
+  "exports": {
+    ".": "./lib/index.mjs",
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "locale",
+    "cordis.patch.yml",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node smoke-test.mjs",
+    "visual": "node visual-check.mjs",
+    "audit:css": "node css-audit.mjs"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "plugin",
+    "user-rules",
+    "system-prompt",
+    "rules"
+  ],
+  "license": "MIT",
+  "author": "new-256",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/new-256/dsh-user-rules.git"
+  },
+  "homepage": "https://github.com/new-256/dsh-user-rules#readme",
+  "bugs": {
+    "url": "https://github.com/new-256/dsh-user-rules/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
