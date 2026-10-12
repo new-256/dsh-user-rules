@@ -34,7 +34,8 @@
     "test": "node smoke-test.mjs",
     "visual": "node visual-check.mjs",
     "audit:css": "node css-audit.mjs",
-    "verify": "node smoke-test.mjs && node css-audit.mjs && node visual-check.mjs"
+    "verify": "node smoke-test.mjs && node css-audit.mjs && node visual-check.mjs",
+    "verify:live": "node live-check.mjs"
   },
   "keywords": [
     "dsh",
